@@ -1,0 +1,11 @@
+opencv-python
+mediapipe
+numpy
+pyautogui
+pyperclip
+SpeechRecognition
+pyttsx3
+pyaudio
+requests
+beautifulsoup4
+torch

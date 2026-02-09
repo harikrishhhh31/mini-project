@@ -38,7 +38,7 @@ class GestureArbiter:
         
         if "color" in cmd:
              print("🎨 ARBITER: Voice Context Detected. WINNER: CHAMELEON")
-             return "ACTION_COLOR_PICK", 1.0
+             return "ACTION_CHAMELEON", 1.0
              
         elif "open" in cmd:
              return "ACTION_OPEN_APP", 1.0

@@ -1,5 +1,7 @@
 import pyautogui
 import time
+import os
+import pyperclip
 from .config import *
 
 class ActionDispatcher:
@@ -64,6 +66,8 @@ class ActionDispatcher:
             
         elif action == "ACTION_THROW":
            print("🚀 EXECUTING TELEPORT THROW NETWORK REQUEST...")
+           # Simulate Windows Share / Dictation
+           pyautogui.hotkey('win', 'h')
            self.feedback("Transferring Data.")
            
         elif action == "ACTION_SILENCE":
@@ -76,11 +80,35 @@ class ActionDispatcher:
             
         elif action == "ACTION_PEEK":
             print("👁️ PEEK MODE ACTIVE")
-
+            # Aero Peek: Win + Comma (Hold briefly to see desktop)
+            pyautogui.hotkey('win', ',')
+            
         elif action == "ACTION_CHAMELEON":
             print("🎨 CHAMELEON MODE ACTIVATE")
-            self.feedback("Visual Analysis Started.")
+            try:
+                x, y = pyautogui.position()
+                pixel_color = pyautogui.pixel(x, y)
+                hex_color = '#{:02x}{:02x}{:02x}'.format(*pixel_color)
+                pyperclip.copy(hex_color)
+                print(f"🎨 COLOR COPIED: {hex_color} at ({x}, {y})")
+                self.feedback(f"Color {hex_color} copied.")
+            except Exception as e:
+                print(f"🎨 CHAMELEON ERROR: {e}")
+                self.feedback("Color capture failed.")
             
+        elif action == "ACTION_SQUINT_SCALE":
+            print("🔍 SQUINT DETECTED: MAGNIFIER ZOOM")
+            # Windows Magnifier: Win + Plus
+            # Note: '+' usually requires shift if not using keypad, 
+            # but pyautogui handles generic '+' as the key. 
+            # If that fails, might need to try '=' or numpad key.
+            pyautogui.hotkey('win', '+')
+            
+        elif action == "ACTION_PROX_ZOOM":
+            print("🔭 PROXIMITY ZOOM: FOCUS MODE")
+            # Browser / App Zoom: Ctrl + Plus
+            pyautogui.hotkey('ctrl', '+')
+
         elif action == "ACTION_OPEN_APP":
             cmd = data.get('voice_command', '')
             app = cmd.replace('open', '').strip()
@@ -142,4 +170,3 @@ class ActionDispatcher:
         elif action == "ACTION_EXIT":
             self.feedback("Shutting down core systems.")
             pass
-
