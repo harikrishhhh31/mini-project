@@ -1,89 +1,111 @@
-# 🧠 Heisenberg (Elite System) - [Work In Progress]
+# Heisenberg: A Multimodal Assistive Interface for Contactless Computing
 
-**Heisenberg** is an advanced, multimodal AI assistant designed to redefine human-computer interaction. It combines **Computer Vision** and **Voice Recognition** to create a seamless, "Iron Man" style interface. 
+**Heisenberg** is a prototype Human-Computer Interaction (HCI) system designed to enable contactless computer operation. By integrating computer vision and voice recognition, the system provides alternative input modalities for users with limited upper-limb mobility, spinal cord injuries, or motor impairments that make traditional mouse and keyboard interaction difficult or impossible.
 
-Currently, the system enables control of your PC with hand gestures, bio-adaptive triggers (squinting/leaning), and natural voice commands.
-
-> **Note**: This project is currently under active development. Some advanced AI features (Local LLM integration) are in the experimental phase.
+The project aims to create a robust, error-tolerant interface that translates natural bio-mechanical cues (hand tracking, facial expressions, voice commands) into precise operating system inputs.
 
 ---
 
-## ✨ Implemented Features
+## 1. System Overview & Design Philosophy
 
-### 1. 🖱️ Advanced Gesture Control (Vision Core)
-Navigate your computer without a mouse. The system tracks your hands and face in real-time using MediaPipe.
-- **Mouse Movement**: Move your hand to control the cursor with physics-based smoothing.
-- **Clicks**: 
-  - **Left Click**: Pinch Left Hand (Sniper Mode).
-  - **Right Click**: Pinch Right Hand Middle Finger.
-  - **Drag & Drop**: Pinch Right Index Finger and move.
-- **Scroll**: Vertical hand velocity triggers scrolling.
+The system is built upon the principle of **Multi-Modal Redundancy**: critical actions can be performed through multiple independent channels (voice or gesture), ensuring that if one modality fails or causes fatigue, the user has a backup method.
 
-### 2. 🎭 Special "Jutsu" & Bio-Adaptive Actions
-- **Teleport Throw**: Make a fist and "throw" your hand to simulate a file transfer/share (`Win + H`).
-- **Shadow Clone**: "Peace Split" gesture (✌️ -> 🖐️) snaps the window to the left (`Win + Left`).
-- **Peek Mode**: Lift a flat hand to transparently view the desktop (Aero Peek).
-- **Chameleon Mode**: Point at any pixel and say *"Color"*. The system captures the color and copies the HEX code.
-- **Squint-to-Zoom**: Squint your eyes to automatically trigger the Magnifier.
-- **Proximity Focus**: Lean your face closer to the screen to zoom into the active window/browser.
+### Primary User Group
+Individuals who retain partial motor control of the head or hands but lack the fine motor skills or range of motion required for physical peripherals.
 
-### 3. 🎤 Intelligent Voice Command (Voice Core)
-- **App Launching**: *"Open Calculator"*, *"Open Notepad"*.
-- **Dictation**: *"Type Hello World"*.
-- **Web Search**: *"Search for quantum physics"*.
-- **System Control**: *"Stop"*, *"Exit"*, *"Silence"*.
-
-### 4. 🌐 Basic Knowledge Retrieval (Brain Core)
-- **Web Search Fallback**: Currently, the system uses a DuckDuckGo web scraper to answer basic "What/Who/How" questions if no local model is loaded.
-- **Complex Output**: Code snippets and long answers are written to a text file for easier reading.
+### Interaction Loop
+The system follows a strict feedback loop to ensure user confidence:
+1.  **User Action**: The user performs a gesture (e.g., pinch) or vocalizes a command.
+2.  **System Interpretation**: The `Gesture Arbiter` and `Vision Core` analyze the input against pre-defined confidence thresholds.
+3.  **Visual/Audio Feedback**: The `Hud Renderer` displays a visual confirmation (e.g., skeletal overlay change), or the system provides auditory cues ("Click confirmed"), complying with WCAG accessibility principles for non-visual feedback.
+4.  **Execution & Recovery**: The command is executed. If the confidence is low, the action is discarded to prevent erroneous inputs, allowing the user to re-attempt the gesture.
 
 ---
 
-## 🚧 In Development / Roadmap
+## 2. Input Modalities
 
-### 🧠 Local Neural Brain (LLM Integration)
-*Status: Experimental / Not Fully Implemented*
-- We are working on integrating a **Local Large Language Model (Llama-3 / Mistral)** to replace the web scraper.
-- The goal is to have offline, private, and highly intelligent conversations without internet access.
-- **Neural Architect**: We have the model definitions (`neural_architect.py`) for a custom MoE (Mixture of Experts) architecture, but it is currently a research component and not yet the active brain of the system.
+### A. Computer Vision (Kinematic Input)
+Utilizing MediaPipe for real-time tracking, the system maps relative hand coordinates to the screen cursor using a proprietary smoothing algorithm (`OneEuroFilter`) to filter out tremors and jitters common in motor impairments.
+
+| Feature | Interaction Design | Assistive Function |
+| :--- | :--- | :--- |
+| **Cursor Navigation** | Hand tracking with velocity smoothing. | Replaces physical mouse movement. |
+| **Primary Click** | Thumb-Index Pinch (Left Hand). | Alternative to left-click button. |
+| **Context Click** | Thumb-Middle Pinch (Right Hand). | Alternative to right-click button. |
+| **Drag Operations** | Thumb-Index Pinch + Hold. | Enables window movement and file selection. |
+| **Inertial Scroll** | Vertical velocity thresholding. | Scroll without repetitive wheel movement. |
+
+### B. Bio-Adaptive Triggers (Facial Analysis)
+These passive triggers continuously monitor user state to provide assistive visual aids without explicit commands.
+
+-   **Visual Magnification (Squint Detection)**: Detecting a reduction in Eye Aspect Ratio (EAR) triggers the System Magnifier. This assists users with visual impairments or allows detailed viewing without leaning forward.
+-   **Focus Mode (Proximity Detection)**: Measuring the Z-depth of facial landmarks triggers a "Focus" state (Browser Zoom) when the user leans towards the screen, mimicking natural human vision accommodation.
+
+### C. Voice Control (Semantic Input)
+A secondary layer for complex commands that are difficult to encode in gestures.
+
+-   **System Control**: *"Stop"*, *"Silence"* (Mute Audio).
+-   **Application Management**: *"Open Calculator"*, *"Open Notepad"*.
+-   **Text Input**: Dictation mode for hands-free typing.
+-   **Information Retrieval**: Fallback web-search for quick information access.
 
 ---
 
-## 🛠️ Installation & Usage
+## 3. Advanced Assistive Actions
 
-### Prerequisites
-- Python 3.8+
-- Webcam
-- Microphone
+The system abstracts complex keyboard shortcuts into discrete, macroscopic gestures to reduce cognitive load and physical strain.
 
-### 1. Installation
+-   **Inertial Transfer (High Velocity Gesture)**: A rapid hand movement simulates `Win + H` (Share/Dictation), simplifying the initiation of data transfer protocols.
+-   **Layout Management (Gesture Parsing)**: A specific "Split" gesture triggers `Win + Left`, allowing users to snap windows and organize their workspace with a single gross motor movement.
+-   **Visibility (Peek)**: Lifting a flat hand triggers Windows Aero Peek, providing a quick overview of the desktop without minimizing windows.
+-   **Color Sampling**: A voice-triggered context action ("Color") samples the pixel under the cursor, aiding in design tasks without requiring precise mouse positioning.
+
+---
+
+## 4. Architecture
+
+The codebase is modularized to support independent development of input streams:
+
+-   `vision_core.py`: Handling landmark extraction and noise filtering.
+-   `voice_core.py`: Asynchronous speech recognition engine.
+-   `gesture_arbiter.py`: Deterministic state machine that resolves conflicts between inputs (e.g., ignoring voice while a gesture is active).
+-   `action_dispatcher.py`: Interface with the Operating System API (Win32/PyAutoGUI).
+-   `neural_architect.py`: *[Experimental]* Prototype code for a local Large Language Model (LLM) to provide context-aware predictive text and assistance.
+
+---
+
+## 5. Limitations & Constraints
+
+As a prototype, the system has several known limitations that affect its viability in a production environment:
+
+1.  **Environmental Sensitivity**: Performance is highly dependent on lighting conditions. Low light or backlighting significantly degrades tracking accuracy.
+2.  **Gorilla Arm Syndrome**: Prolonged use of mid-air gestures causes rapid arm fatigue. The system is currently best suited for burst interactions rather than sustained usage.
+3.  **False Positives**: "Squint" and "pinch" detection may occasionally trigger falsely during normal behavior (e.g., blinking or resting hands).
+4.  **Hardware Dependency**: Requires a functional webcam and microphone. Processing latency is dependent on CPU/GPU performance.
+
+---
+
+## 6. Installation
+
+### Requirements
+-   Python 3.8+
+-   Standard Webcam & Microphone
+
+### Setup
 ```bash
 pip install -r requirements.txt
 ```
-*Key libraries: `opencv-python`, `mediapipe`, `pyautogui`, `SpeechRecognition`, `pyttsx3`, `beautifulsoup4`, `pyperclip`.*
+*(Dependencies include `opencv-python`, `mediapipe`, `pyautogui`, `SpeechRecognition`, etc.)*
 
-### 2. Running the System
-Run the main system functionality:
-
+### Execution
+Run the main entry point to initialize the gesture and voice threads:
 ```bash
 python main_file.py
 ```
-*(Replace `main_file.py` with your actual entry point script, e.g., `elite_system_runner.py` or similar if applicable)*
 
 ---
 
-## 📂 Project Structure
-
-- **`action_dispatcher.py`**: Executes OS-level commands (Mouse, Keyboard). **[Active]**
-- **`gesture_arbiter.py`**: Decides the winning action from Vision/Voice inputs. **[Active]**
-- **`vision_core.py`**: Hand and Face tracking. **[Active]**
-- **`voice_core.py`**: Speech recognition. **[Active]**
-- **`hud_renderer.py`**: Draws the UI overlay. **[Active]**
-- **`brain_core.py`**: Handles queries (currently Web Search). **[WIP]**
-- **`neural_architect.py`**: Custom PyTorch LLM definitions. **[Research/Inactive]**
-- **`config.py`**: Configuration settings.
-
----
-
-## ⚠️ Disclaimer
-This system uses `pyautogui` with `FAILSAFE = False` to allow full screen traversing. The "Throw" and "Squint" features rely on heuristic thresholds which may need tuning in `config.py` for your specific camera setup.
+## 7. Future Work
+-   **Fatigue Reduction**: Implementation of "Micro-gestures" that require minimal range of motion.
+-   **Local Intelligence**: Full integration of the local LLM to allow the system to predict user intent and automate repetitive workflows.
+-   **Calibration**: User-specific calibration profiles to account for varying ranges of motion and asymmetry in motor control.
