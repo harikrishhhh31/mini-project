@@ -1,6 +1,6 @@
 import threading
 import speech_recognition as sr
-import pyttsx3
+
 import queue
 
 class VoiceCore(threading.Thread):
@@ -12,15 +12,7 @@ class VoiceCore(threading.Thread):
         
         # Audio Setup
         self.recognizer = sr.Recognizer()
-        self.engine = pyttsx3.init()
-        self.engine.setProperty('rate', 160) # Slightly faster voice
         
-    def speak(self, text):
-        """Non-blocking speech output (optional thread if needed)"""
-        print(f"🤖 JARVIS: {text}")
-        self.engine.say(text)
-        self.engine.runAndWait()
-
     def run(self):
         """The Main Loop of the Voice Thread"""
         print("🎤 Voice Core: Online & Listening...")
@@ -40,9 +32,9 @@ class VoiceCore(threading.Thread):
                     # Send to the central processing queue
                     self.command_queue.put({"type": "VOICE_COMMAND", "payload": command})
                     
-                    # Immediate Feedback
+                    # Immediate Feedback (Preserved via Queue)
                     if "heisenberg" in command:
-                        self.speak("Say my name.")
+                        self.command_queue.put({"type": "FEEDBACK", "payload": "Say my name."})
                         
                 except sr.UnknownValueError:
                     pass # Just couldn't understand, ignore.

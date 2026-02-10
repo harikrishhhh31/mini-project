@@ -105,7 +105,22 @@ python main_file.py
 
 ---
 
+## 8. Project Status (Feb 2026)
+
+### ✅ Completed & Shippable
+- **Core Architecture**: Full separation of concerns (Perception → Decision → Authority → Execution).
+- **System Controller**: State-based authority layer (IDLE, VOICE, GESTURE, HYBRID) is fully operational.
+- **Multimodal Input**: concurrent processing of Hand Tracking (MediaPipe) and Voice Commands (SpeechRecognition).
+- **Safety protocols**: `pyautogui` Fail-Safe enabled; dedicated ACTION_EXIT paths.
+- **Feedback Loop**: HUD rendering and Text-to-Speech feedback are synchronized with system state.
+
+### 🚧 In Progress / Experimental
+- **Neural Architect**: The custom `neural_architect.py` (PyTorch MoE model) is implemented but the system currently defaults to `llama.cpp` bindings for stability.
+- **Calibration**: User-specific threshold tuning is currently hardcoded for demonstration.
+
+---
+
 ## 7. Future Work
 -   **Fatigue Reduction**: Implementation of "Micro-gestures" that require minimal range of motion.
 -   **Local Intelligence**: Full integration of the local LLM to allow the system to predict user intent and automate repetitive workflows.
--   **Calibration**: User-specific calibration profiles to account for varying ranges of motion and asymmetry in motor control.
+-   **Calibration**: User-specific calibration profiles to account for varying ranges of motion and asymmetry in motor control

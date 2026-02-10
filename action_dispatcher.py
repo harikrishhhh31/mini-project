@@ -6,7 +6,7 @@ from .config import *
 
 class ActionDispatcher:
     def __init__(self, speaker=None):
-        pyautogui.FAILSAFE = False
+        pyautogui.FAILSAFE = True
         self.screen_w, self.screen_h = pyautogui.size()
         self.speaker = speaker # The Voice Output Thread
         
