@@ -10,12 +10,58 @@ class SystemState(Enum):
 class SystemController:
     def __init__(self):
         self.current_state = SystemState.IDLE
+        # Sensitivity Control (Scale Factor: 0.5x to 2.0x)
+        self.sensitivity = 1.0
+        self.MIN_SENS = 0.5
+        self.MAX_SENS = 2.0
+        self.STEP = 0.1
+        
+        # HUD Message System
+        self.system_message = None
+        self.message_expiry = 0
 
     def set_state(self, new_state: SystemState):
         """
         Updates the current system state.
         """
         self.current_state = new_state
+        
+    def adjust_sensitivity(self, direction, speaker=None):
+        """
+        Safely adjusts sensitivity within bounds.
+        """
+        old_sens = self.sensitivity
+        
+        if direction == "increase":
+            self.sensitivity = min(self.MAX_SENS, self.sensitivity + self.STEP)
+        elif direction == "decrease":
+            self.sensitivity = max(self.MIN_SENS, self.sensitivity - self.STEP)
+        elif direction == "reset":
+            self.sensitivity = 1.0
+            
+        # Round to 1 decimal to avoid float drift
+        self.sensitivity = round(self.sensitivity, 1)
+        
+        if speaker and old_sens != self.sensitivity:
+             speaker.speak(f"Sensitivity set to {self.sensitivity}")
+             
+        # Set HUD Message for 2 seconds
+        self.system_message = f"Sensitivity: {self.sensitivity}"
+        self.message_expiry = time.time() + 2.0
+             
+        return self.sensitivity
+
+    def get_sensitivity(self) -> float:
+        """
+        Returns the current sensitivity value.
+        """
+        return self.sensitivity
+
+    def get_active_message(self):
+        """Returns temporary system message if active"""
+        if time.time() < self.message_expiry:
+             return self.system_message
+        return None
 
     def authorize_action(self, suggested_action: str, source: str) -> bool:
         """

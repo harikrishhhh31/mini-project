@@ -4,7 +4,9 @@ from .config import *
 
 class HudRenderer:
     def __init__(self):
-        pass
+        self.click_timer = 0
+        self.click_pos = (0, 0)
+        self.reject_timer = 0
 
     def draw_text(self, img, text, pos, color=COLOR_CYAN_CORE, scale=0.6, thickness=1):
         cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
@@ -42,7 +44,7 @@ class HudRenderer:
         cv2.line(img, (center[0]-radius, center[1]), (center[0]+radius, center[1]), COLOR_CYAN_GLOW, 1)
         cv2.line(img, (center[0], center[1]-radius), (center[0], center[1]+radius), COLOR_CYAN_GLOW, 1)
 
-    def render(self, frame, vision_data, decision):
+    def render(self, frame, vision_data, decision, events=[]):
         """
         Main render loop. Draws all UI elements on top of the frame.
         """
@@ -52,10 +54,27 @@ class HudRenderer:
         cv2.addWeighted(overlay, 0.2, frame, 0.8, 0, frame)
         
         h, w, c = frame.shape
+        current_time = time.time()
         
+        # Handle Events
+        if "CLICKED" in events:
+            self.click_timer = current_time + 0.3
+            self.click_pos = vision_data.get('cursor', (w//2, h//2))
+            
         # 1. STATUS WIDGET (Top Left)
-        self.draw_text(frame, "HEISENBERG CORE: ONLINE", (20, 30), COLOR_CYAN_CORE)
-        self.draw_text(frame, f"MODE: {decision}", (20, 60), COLOR_GOLD if "ACTION" in decision else COLOR_CYAN_GLOW)
+        self.draw_text(frame, "HEISENBERG CORE: ONLINE", (20, 30), COLOR_CYAN_CORE, scale=0.7)
+        
+        # Mode Display logic with color coding
+        mode_color = COLOR_CYAN_GLOW
+        if "ACTION" in decision: mode_color = COLOR_GOLD
+        if "REJECTED" in decision or "BLOCKED" in decision: mode_color = COLOR_RED_ALERT
+        
+        self.draw_text(frame, f"MODE: {decision}", (20, 70), mode_color, scale=1.0, thickness=2)
+        
+        # Voice Status (Top Right)
+        if vision_data.get("voice_active"):
+            self.draw_text(frame, "MIC: LISTENING", (w - 200, 30), (0, 255, 0), scale=0.7) # Green
+
         
         # Data widgets
         if vision_data.get('velocity'):
@@ -72,6 +91,14 @@ class HudRenderer:
             # Draw Line to destination
             if vision_data.get('is_fist'):
                 self.draw_text(frame, "GRIP ACTIVE", (cursor[0]+30, cursor[1]), COLOR_GOLD)
+
+            # Fix 4: Click Feedback Animation
+            current_time = time.time()
+            if current_time < self.click_timer:
+                # Growing circle
+                progress = 1.0 - (self.click_timer - current_time) / 0.3
+                radius = int(20 + 30 * progress)
+                cv2.circle(frame, self.click_pos, radius, COLOR_GOLD, 2)
 
         # 3. FACE TRACKING (Nose Target)
         if vision_data.get('face_present'):

@@ -13,6 +13,9 @@ class ActionDispatcher:
         # State for "Drag and Drop"
         self.is_dragging = False
         self.last_click_time = 0
+        
+        # Fix 2: Hybrid Click Stability (Pending Click Timer)
+        self.pending_click_expiry = 0
 
     def feedback(self, text):
         """Helper to speak only if speaker is attached"""
@@ -23,41 +26,58 @@ class ActionDispatcher:
         """
         Executes the command decided by the Arbiter.
         """
+        if self.pending_click_expiry > 0:
+            if current_time >= self.pending_click_expiry:
+                pyautogui.click()
+                print("🖱️ VOICE CLICK EXECUTED")
+                self.pending_click_expiry = 0
+                events.append("CLICKED") # Fix 4: Visual Indicator
+            else:
+                # Still frozen - Do NOTHING (Block cursor movement)
+                return events
+
         # 1. STANDARD MOUSE CONTROL (With Bimanual Click Logic)
         if action == "ACTION_MOUSE_MOVE":
-            # ... (Mouse logic remains same) ...
-            x, y = data.get('cursor', (0,0))
-            if x and y:
-                pyautogui.moveTo(x, y, _pause=False)
+             # ... (Mouse logic remains same) ...
+             x, y = data.get('cursor', (0,0))
+             if x and y:
+                 pyautogui.moveTo(x, y, _pause=False)
             
-            hands = data.get('hands', {})
-            right = hands.get('Right', {})
-            left = hands.get('Left', {})
+             hands = data.get('hands', {})
+             right = hands.get('Right', {})
+             left = hands.get('Left', {})
 
-            # A. RIGHT CLICK: Right Hand Middle Pinch
-            if right.get('pinch_middle', 1000) < CLICK_DIST:
-                 if time.time() - self.last_click_time > 0.5: # Debounce
-                     pyautogui.rightClick()
-                     self.last_click_time = time.time()
-                     print("🖱️ RIGHT CLICK")
-                     # self.feedback("Menu") # Too chatty for clicks?
+             # A. RIGHT CLICK: Right Hand Middle Pinch
+             if right.get('pinch_middle', 1000) < CLICK_DIST:
+                  if time.time() - self.last_click_time > 0.5: # Debounce
+                      pyautogui.rightClick()
+                      self.last_click_time = time.time()
+                      print("🖱️ RIGHT CLICK")
+                      events.append("CLICKED")
+                      # self.feedback("Menu") # Too chatty for clicks?
 
-            # B. LEFT CLICK: Left Hand Middle Pinch (Sniper Mode)
-            if left.get('pinch_middle', 1000) < CLICK_DIST:
-                 if time.time() - self.last_click_time > 0.3:
-                     pyautogui.click()
-                     self.last_click_time = time.time()
-                     print("🖱️ LEFT CLICK (Bimanual)")
+             # B. LEFT CLICK: Left Hand Middle Pinch (Sniper Mode)
+             if left.get('pinch_middle', 1000) < CLICK_DIST:
+                  if time.time() - self.last_click_time > 0.3:
+                      pyautogui.click()
+                      self.last_click_time = time.time()
+                      print("🖱️ LEFT CLICK (Bimanual)")
+                      events.append("CLICKED")
 
-            # C. DRAG / PRIMARY: Right Hand Index Pinch
-            if right.get('pinch_index', 1000) < CLICK_DIST:
-                if not self.is_dragging:
-                    pyautogui.mouseDown()
-                    self.is_dragging = True
-            else:
-                if self.is_dragging:
-                    pyautogui.mouseUp()
-                    self.is_dragging = False
+             # C. DRAG / PRIMARY: Right Hand Index Pinch
+             if right.get('pinch_index', 1000) < CLICK_DIST:
+                 if not self.is_dragging:
+                     pyautogui.mouseDown()
+                     self.is_dragging = True
+             else:
+                 if self.is_dragging:
+                     pyautogui.mouseUp()
+                     self.is_dragging = False
+
+        elif action == "ACTION_CLICK":
+            # Start the Freeze Timer (150ms)
+            self.pending_click_expiry = current_time + 0.15
+            self.feedback("Clicking...")
 
         # 2. ELITE FEATURES
         elif action == "ACTION_SCROLL_GRAB":

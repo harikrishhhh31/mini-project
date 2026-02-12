@@ -42,9 +42,10 @@ class VisionCore:
         width = np.linalg.norm(left - right)
         return height / (width + 1e-6)
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, sensitivity=1.0):
         """
         Main pipeline. Returns a dictionary of 'High Level' features for the Arbiter.
+        Sensitivity: 1.0 = Normal (1:1 mapping). >1.0 = Faster (Smaller hand movement covers screen).
         """
         h, w, c = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -117,7 +118,26 @@ class VisionCore:
                 }
 
                 # Coordinates (Index Tip)
-                cx, cy = int(index_tip.x * w), int(index_tip.y * h)
+                raw_cx, raw_cy = int(index_tip.x * w), int(index_tip.y * h)
+                
+                # Apply Sensitivity (Scale input relative to center)
+                # "Faster" = Sensitivity > 1.0
+                if sensitivity != 1.0:
+                    center_x, center_y = w // 2, h // 2
+                    # Scale delta from center
+                    # If sens = 2.0, a delta of 10 become 20.
+                    dx = (raw_cx - center_x) * sensitivity
+                    dy = (raw_cy - center_y) * sensitivity
+                    
+                    cx = int(center_x + dx)
+                    cy = int(center_y + dy)
+                    
+                    # Clamp to screen
+                    cx = max(0, min(w, cx))
+                    cy = max(0, min(h, cy))
+                else:
+                    cx, cy = raw_cx, raw_cy
+                
                 
                 # Velocity & Smoothing (Only tracked for Right/Dominant hand for cursor usually)
                 if label == "Right": # Assuming Right is dominant pointer
@@ -145,6 +165,17 @@ class VisionCore:
                     finger_gap = math.hypot(index_tip.x - middle_tip.x, index_tip.y - middle_tip.y)
                     if finger_gap > 0.15:
                         hand_data["gesture"] = "PEACE_SPLIT"
+                
+                # Neural Network Input (Raw Landmarks relative to Wrist)
+                # 21 points * 2 coords (x, y) = 42 floats
+                raw_landmarks = []
+                for lm in hand.landmark:
+                    # Normalize relative to wrist to be position-invariant
+                    rx = lm.x - wrist.x
+                    ry = lm.y - wrist.y
+                    raw_landmarks.extend([rx, ry])
+                
+                hand_data["raw_landmarks"] = raw_landmarks
                         
                 data["hands"][label] = hand_data
 

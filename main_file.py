@@ -48,17 +48,46 @@ def main():
     # State Tracking variables
     voice_data = {"last_command": ""}
     
+    # Training Data
+    recorded_data = []
+    recorded_labels = []
+    is_recording = False
+    
     try:
         while True:
             # A. CAPTURE FRAME
             ret, frame = cap.read()
-            if not ret: break
+            if not ret: 
+                # Fix 3: Camera Failure Feedback & Recon
+                print("⚠️ CAMERA DISCONNECTED. Retrying...")
+                speaker.speak("Camera connection lost.")
+                
+                # Try to reconnect
+                reconnected = False
+                for _ in range(5):
+                    cap.release()
+                    time.sleep(1)
+                    cap = cv2.VideoCapture(0)
+                    if cap.isOpened():
+                         _, check = cap.read()
+                         if check is not None:
+                             reconnected = True
+                             speaker.speak("Camera online.")
+                             break
+                
+                if not reconnected:
+                    print("CRITICAL: Camera reconnect failed.")
+                    break
+                else:
+                    continue # Skip this loop iter, get fresh frame
             
             frame = cv2.flip(frame, 1) # Mirror view
             
             # B. PROCESS INPUTS
             # 1. Vision
-            vision_data = vision.process_frame(frame)
+            # Use Controller Sensitivity for "Faster Cursor" logic
+            current_sens = controller.get_sensitivity()
+            vision_data = vision.process_frame(frame, sensitivity=current_sens)
             
             # 2. Voice (Poll Queue)
             try:
@@ -69,7 +98,6 @@ def main():
                         voice_data["last_command"] = cmd
                         
                         # Controller State Update based on Keyword?
-                        # For now, simplistic: Any specific keywords to change state?
                         if "gesture only" in cmd:
                             controller.set_state(SystemState.GESTURE)
                             speaker.speak("Gesture Mode.")
@@ -86,9 +114,6 @@ def main():
                 pass
                 
             # C. DECISION (Arbiter)
-            # We assume Hybrid Mode default effectively for the Arbiter's logic, 
-            # but the Controller will filter it.
-            # Ideally, we should initialize Controller to HYBRID.
             if controller.current_state == SystemState.IDLE:
                  # Auto-start in Hybrid for this demo
                  controller.set_state(SystemState.HYBRID)
@@ -97,11 +122,15 @@ def main():
             
             # Determine Source for Authority Check
             source = "GESTURE"
-            if suggested_action in ["ACTION_OPEN_APP", "ACTION_TYPE_TEXT", "ACTION_SEARCH", "ACTION_QUERY", "ACTION_EXIT", "ACTION_CHAMELEON"]:
+            if suggested_action in ["ACTION_OPEN_APP", "ACTION_TYPE_TEXT", "ACTION_SEARCH", "ACTION_QUERY", "ACTION_EXIT", "ACTION_CHAMELEON", "ACTION_CLICK", "ACTION_VOICE_REJECTED"]:
                 source = "VOICE"
             
             # D. AUTHORITY CHECK (System Controller)
             is_allowed = controller.authorize_action(suggested_action, source)
+            
+            # Fix: Clear blocked voice commands to prevent jam
+            if not is_allowed and source == "VOICE":
+                 voice_data["last_command"] = ""
             
             final_action = "IDLE"
             action_data = vision_data.copy() # Start with vision data
@@ -112,14 +141,60 @@ def main():
                 
                 # Special Handling for Brain Query (It needs the answer first)
                 if final_action == "ACTION_QUERY":
-                    # Fetch from Brain
-                    is_cmd, answer = brain.process_query(voice_data['last_command'])
-                    action_data['brain_response'] = answer
+                    # Fetch from Brain (Returns JSON now)
+                    is_cmd, brain_output = brain.process_query(voice_data['last_command'])
+                    
+                    # Handle Structured Output
+                    if isinstance(brain_output, dict):
+                        b_type = brain_output.get("type", "none")
+                        b_intent = brain_output.get("intent")
+                        b_params = brain_output.get("parameters", {})
+                        b_response = brain_output.get("response", "")
+                        
+                        if b_type == "system_control":
+                            if b_intent == "ADJUST_SENSITIVITY":
+                                direction = b_params.get("direction", "reset")
+                                controller.adjust_sensitivity(direction, speaker)
+                            elif b_intent == "RESET_SENSITIVITY":
+                                controller.adjust_sensitivity("reset", speaker)
+                            
+                            # Speak response
+                            if b_response:
+                                speaker.speak(b_response)
+                                
+                            # Don't execute confusing actions if it was a system control
+                            final_action = "IDLE" 
+
+                        elif b_intent == "OPEN_APP":
+                             # Convert to ACTION_OPEN_APP manually if Brain detected it better
+                             final_action = "ACTION_OPEN_APP"
+                             action_data['voice_command'] = f"open {b_params.get('app_name', '')}" # Simplified
+                        
+                        else:
+                            # Standard Query Response
+                            action_data['brain_response'] = b_response
+                    else:
+                        # Legacy string fallback (just in case)
+                        action_data['brain_response'] = str(brain_output)
+
+                # Fix 1: Voice Rejection Handling
+                elif final_action == "ACTION_VOICE_REJECTED":
+                    voice_data["last_command"] = "" # Clear invalid command
+                    final_action = "VOICE: REJECTED" # Show on HUD
+                    # optional sound? speaker.speak("Unknown.")
                     
                 # E. EXECUTION (Dispatcher)
                 # Only execute if it's not LOCKED (Arbiter returns locked for cooldowns)
-                if final_action != "LOCKED":
-                    dispatcher.execute(final_action, action_data)
+                hud_events = []
+                if final_action not in ["LOCKED", "IDLE", "VOICE: REJECTED"]:
+                    try:
+                        hud_events = dispatcher.execute(final_action, action_data)
+                    except Exception as e:
+                        if "FailSafe" in str(e):
+                             print("🛑 EMERGENCY STOP TRIGGERED. Cursor reset.")
+                             # Maybe reset cursor?
+                        else:
+                             print(f"⚠️ DISPATCH ERROR: {e}")
                     
                     # Clear voice command after successful execution to prevent looping
                     if source == "VOICE":
@@ -130,13 +205,74 @@ def main():
             ui_state = f"{final_action}" 
             if not is_allowed and suggested_action != "MOUSE_MOVE":
                  ui_state = f"BLOCKED ({suggested_action})"
+            elif confidence <= 0.7 and suggested_action not in ["ACTION_MOUSE_MOVE", "LOCKED"]:
+                 ui_state = f"REJECTED ({int(confidence*100)}%)"
+
+            # OVERRIDE with System Message (e.g. Sensitivity)
+            sys_msg = controller.get_active_message()
+            if sys_msg:
+                 ui_state = sys_msg
+            elif is_recording:
+                 ui_state = f"REC: {len(recorded_data)} SAMPLES"
+
+            vision_data["voice_active"] = True # Always listening
                  
-            processed_frame = renderer.render(frame, vision_data, ui_state)
+            processed_frame = renderer.render(frame, vision_data, ui_state, events=hud_events)
             
             cv2.imshow('Heisenberg HUD', processed_frame)
             
             # G. EXIT CONDITION
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1) & 0xFF
+            
+            # --- TRAINING CONTROLS ---
+            if key == ord('r'):
+                is_recording = not is_recording
+                state_msg = "🔴 RECORDING ON" if is_recording else "⚪ RECORDING OFF"
+                print(state_msg)
+                speaker.speak(state_msg)
+                
+            if is_recording:
+                label = -1
+                if key == ord('0'): label = 0 # NONE
+                elif key == ord('1'): label = 1 # OPEN
+                elif key == ord('2'): label = 2 # FIST
+                elif key == ord('3'): label = 3 # PEACE
+                elif key == ord('4'): label = 4 # POINT
+                
+                if label != -1:
+                    # Get raw landmarks from Vision Data
+                    rhs = vision_data.get('hands', {}).get('Right', {})
+                    raw_landmarks = rhs.get('raw_landmarks')
+                    
+                    if raw_landmarks and len(raw_landmarks) == 42:
+                        recorded_data.append(raw_landmarks)
+                        recorded_labels.append(label)
+                        print(f"✅ Sample Saved. Label: {label}. Total: {len(recorded_data)}")
+                        speaker.speak(f"Saved {label}")
+                    else:
+                        print("⚠️ No Hand Detected for Training.")
+                        speaker.speak("No hand.")
+                    
+            if key == ord('t'):
+                if len(recorded_data) > 5:
+                    print("🧠 TRAINING NEURAL NET...")
+                    speaker.speak("Training neural network.")
+                    arbiter.train_neural_net(recorded_data, recorded_labels)
+                    speaker.speak("Training complete.")
+                    recorded_data = [] # Clear after train
+                    recorded_labels = []
+                else:
+                     print("⚠️ Not enough data to train.")
+            
+            if key == ord('c'):
+                recorded_data = []
+                recorded_labels = []
+                print("🗑️ Training Data Cleared.")
+                speaker.speak("Data cleared.")
+            
+            # --- END TRAINING CONTROLS ---
+            
+            if key == ord('q'):
                 break
             
             if final_action == "ACTION_EXIT":
