@@ -3,6 +3,9 @@ import time
 import queue
 import sys
 import threading
+import subprocess
+import requests
+import os
 
 # Core Modules
 from vision_core import VisionCore
@@ -13,8 +16,52 @@ from action_dispatcher import ActionDispatcher
 from hud_renderer import HudRenderer
 from speaker_core import SpeakerCore
 from brain_core import BrainCore
+from settings_manager import load_settings, get_port
+
+def start_settings_server():
+    """Start the FastAPI settings server as a subprocess"""
+    try:
+        # Start server.py as subprocess
+        process = subprocess.Popen(
+            [sys.executable, 'server.py'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+        )
+        
+        # Wait for server to start and get actual port
+        import time
+        time.sleep(2)  # Give server time to start
+        
+        # Reload settings to get actual port (server updates it)
+        settings = load_settings()
+        port = settings.get('port', 2026)
+        
+        # Verify server is running
+        for _ in range(5):
+            try:
+                response = requests.get(f'http://127.0.0.1:{port}/settings', timeout=1)
+                if response.status_code == 200:
+                    print(f"[MAIN] Settings server online on port {port}")
+                    return process, port
+            except:
+                time.sleep(1)
+        
+        print("[MAIN] Failed to connect to settings server")
+        process.terminate()
+        return None, None
+        
+    except Exception as e:
+        print(f"[MAIN] Error starting settings server: {e}")
+        return None, None
 
 def main():
+    # 0. Start Settings Server
+    server_process, server_port = start_settings_server()
+    if server_process is None:
+        print("CRITICAL ERROR: Could not start settings server. Exiting.")
+        sys.exit(1)
+    
     # 1. Initialize Communication Channels
     command_queue = queue.Queue() # Voice -> Main
     
@@ -31,7 +78,7 @@ def main():
     # 4. Intelligence & Decision
     brain = BrainCore() # LLM / Web Search
     arbiter = GestureArbiter() # Intent Resolver
-    controller = SystemController() # State Authority
+    controller = SystemController(server_port=server_port) # State Authority with server
     
     # 5. Execution
     dispatcher = ActionDispatcher(speaker=speaker)
@@ -52,6 +99,23 @@ def main():
     recorded_data = []
     recorded_labels = []
     is_recording = False
+    
+    # Start background thread to sync with server
+    def sync_with_server():
+        """Poll server for settings updates from web UI"""
+        while True:
+            try:
+                if server_port:
+                    response = requests.get(f'http://127.0.0.1:{server_port}/settings', timeout=2)
+                    if response.status_code == 200:
+                        settings = response.json()
+                        controller.update_from_server(settings)
+            except:
+                pass
+            time.sleep(1)  # Poll every second
+    
+    sync_thread = threading.Thread(target=sync_with_server, daemon=True)
+    sync_thread.start()
     
     try:
         while True:
@@ -83,6 +147,9 @@ def main():
             
             frame = cv2.flip(frame, 1) # Mirror view
             
+            # Initialize hud_events for this frame
+            hud_events = []
+
             # B. PROCESS INPUTS
             # 1. Vision
             # Use Controller Sensitivity for "Faster Cursor" logic
@@ -192,7 +259,6 @@ def main():
                     except Exception as e:
                         if "FailSafe" in str(e):
                              print("🛑 EMERGENCY STOP TRIGGERED. Cursor reset.")
-                             # Maybe reset cursor?
                         else:
                              print(f"⚠️ DISPATCH ERROR: {e}")
                     
@@ -286,6 +352,16 @@ def main():
         voice.stop()
         cap.release()
         cv2.destroyAllWindows()
+        
+        # Stop settings server
+        if server_process:
+            print("[MAIN] Stopping settings server...")
+            server_process.terminate()
+            try:
+                server_process.wait(timeout=5)
+            except:
+                server_process.kill()
+        
         speaker.speak("Systems offline.")
         sys.exit(0)
 
