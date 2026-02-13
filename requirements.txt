@@ -9,3 +9,10 @@ pyaudio
 requests
 beautifulsoup4
 torch
+
+# Settings Server Dependencies
+fastapi
+uvicorn
+platformdirs
+sse-starlette
+pywebview
